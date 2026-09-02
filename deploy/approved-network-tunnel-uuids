@@ -1,0 +1,2 @@
+# Guardian-approved NetworkManager VPN/tunnel UUIDs, one per line.
+# Empty by default. Tailscale does not belong here.

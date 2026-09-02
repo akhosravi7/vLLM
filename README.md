@@ -106,18 +106,5 @@ The deployment is host-specific. In particular, the installer currently
 expects user `ali` with uid 1000, project path `/var/home/ali/vLLM`, the Bazzite
 Homebrew Docker packages, and the NVIDIA Container Toolkit runtime.
 
-## Conventional Docker development
-
-The root-level `compose.yaml`, `.env.example`, and direct Compose commands are
-retained only for a conventional Docker host or development environment. They
-are not referenced by the hardened systemd services:
-
-```bash
-cp .env.example .env
-docker compose up -d
-docker compose logs -f
-docker compose down
-```
-
 Direct Docker access is intentionally unavailable to `ali` on the hardened
 host. The named `vllm-cache` volume is retained across normal container removal.

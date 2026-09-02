@@ -2,6 +2,21 @@
 
 Updated: 2026-09-02, America/Chicago
 
+## Session closure
+
+Hardening and post-login verification are complete. At the final check,
+`vllm.service` and `vllm-docker.service` were active, and both the local and
+Tailscale health endpoints returned HTTP 200. No further security work is
+pending from this session.
+
+The repository was reduced to the hardened deployment sources and Markdown
+documentation. The final cleanup removes the unused tracked `.env.example`,
+root-level `compose.yaml`, and `start-vllm.sh`, and updates `.gitignore`, this
+handoff, and `README.md`. These cleanup changes are intentionally left in the
+working tree for review and commit; the last existing commit is `aa5fc03`
+(`Update hardening`). The live `vllm.env` and `models/` remain ignored local
+runtime data and must not be committed.
+
 ## Goal
 
 Run vLLM through root-owned systemd and Docker definitions while `ali` remains
@@ -213,5 +228,6 @@ The user-writable staging files are under `/var/home/ali/vLLM/deploy/`. They are
 not executed by systemd. Guardian installation used a root-owned reviewed copy
 under `/root/vllm-install-staging/`.
 
-The original project `compose.yaml` and `start-vllm.sh` remain as unused legacy
-files and are not referenced by either installed systemd unit.
+The unused root-level `compose.yaml`, `.env.example`, and `start-vllm.sh` legacy
+files were removed after verification. The hardened deployment sources live
+only under `deploy/`.

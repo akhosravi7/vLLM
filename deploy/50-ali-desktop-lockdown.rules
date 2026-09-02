@@ -1,0 +1,35 @@
+// vLLM desktop lockdown: guardian authentication for ali's privileged changes.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "ali")
+        return polkit.Result.NOT_HANDLED;
+
+    var flatpakAdmin = [
+        "org.freedesktop.Flatpak.app-install",
+        "org.freedesktop.Flatpak.runtime-install",
+        "org.freedesktop.Flatpak.update-remote",
+        "org.freedesktop.Flatpak.modify-repo",
+        "org.freedesktop.Flatpak.install-bundle",
+        "org.freedesktop.Flatpak.runtime-uninstall",
+        "org.freedesktop.Flatpak.app-uninstall",
+        "org.freedesktop.Flatpak.configure-remote",
+        "org.freedesktop.Flatpak.configure",
+        "org.freedesktop.Flatpak.override-parental-controls"
+    ];
+    if (flatpakAdmin.indexOf(action.id) >= 0)
+        return polkit.Result.AUTH_ADMIN;
+
+    // NetworkManager does not expose connection type to polkit. Requiring an
+    // administrator here protects VPN creation/import, DNS, and all edits;
+    // activation and Wi-Fi scanning remain usable.
+    var networkAdmin = [
+        "org.freedesktop.NetworkManager.settings.modify.own",
+        "org.freedesktop.NetworkManager.settings.modify.system",
+        "org.freedesktop.NetworkManager.settings.modify.hostname",
+        "org.freedesktop.NetworkManager.settings.modify.global-dns",
+        "org.freedesktop.NetworkManager.wifi.share.protected",
+        "org.freedesktop.NetworkManager.wifi.share.open",
+        "org.freedesktop.NetworkManager.reload"
+    ];
+    if (networkAdmin.indexOf(action.id) >= 0)
+        return polkit.Result.AUTH_ADMIN;
+});

@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+set -u
+
+# NetworkManager dispatcher pre-up guard. One approved UUID per line; blank
+# lines and comments are ignored. Tailscale is not a NetworkManager profile.
+case "${CONNECTION_TYPE:-}" in
+    vpn|wireguard|tun|ip-tunnel)
+        if [[ -r /etc/vllm/approved-network-tunnel-uuids ]]; then
+            while IFS= read -r approved; do
+                approved=${approved%%#*}
+                approved=${approved//[[:space:]]/}
+                [[ -n "$approved" && "$approved" == "${CONNECTION_UUID:-}" ]] && exit 0
+            done < /etc/vllm/approved-network-tunnel-uuids
+        fi
+        logger -p authpriv.warning -t vllm-network-lockdown \
+            "blocked NetworkManager ${CONNECTION_TYPE:-unknown} profile ${CONNECTION_UUID:-unknown}"
+        exit 1
+        ;;
+esac
+exit 0

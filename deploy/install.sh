@@ -35,6 +35,11 @@ for required in \
   "$SOURCE_DIR/vllmctl" \
   "$SOURCE_DIR/vllm.logrotate" \
   "$SOURCE_DIR/patch-runc-rpath.py" \
+  "$SOURCE_DIR/install-desktop-lockdown.sh" \
+  "$SOURCE_DIR/rollback-desktop-lockdown.sh" \
+  "$SOURCE_DIR/50-ali-desktop-lockdown.rules" \
+  "$SOURCE_DIR/10-block-unapproved-tunnels" \
+  "$SOURCE_DIR/approved-network-tunnel-uuids" \
   /home/linuxbrew/.linuxbrew/bin/docker \
   /home/linuxbrew/.linuxbrew/bin/docker-compose \
   /home/linuxbrew/.linuxbrew/opt/docker-engine/bin/dockerd \
@@ -48,6 +53,10 @@ for required in \
   /home/linuxbrew/.linuxbrew/opt/libpathrs/lib/libpathrs.so.0; do
   [[ -x "$required" || -r "$required" ]] || { printf 'Missing prerequisite: %s\n' "$required" >&2; exit 1; }
 done
+
+# Install the desktop/network policy only from this already root-owned staging
+# snapshot. It never reads or executes files from ali's project tree.
+"$SOURCE_DIR/install-desktop-lockdown.sh"
 
 [[ $(stat -c %u "$PROJECT_DIR/vllm.env") -eq 1000 ]] || {
   printf '%s must be owned by uid 1000 (ali).\n' "$PROJECT_DIR/vllm.env" >&2
