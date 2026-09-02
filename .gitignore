@@ -1,0 +1,13 @@
+# Model weights and metadata are local runtime inputs.
+models/
+
+# Local Compose configuration.
+.env
+
+# Local vLLM/runtime artifacts.
+.cache/
+cache/
+logs/
+*.log
+__pycache__/
+*.py[cod]
