@@ -1,0 +1,9 @@
+/var/log/vllm/vllm.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    copytruncate
+    su root ali
+}

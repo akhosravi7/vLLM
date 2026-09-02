@@ -1,0 +1,19 @@
+[Unit]
+Description=Dedicated Docker Engine for vLLM
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+Environment=PATH=/usr/local/bin/vllm-docker:/usr/sbin:/usr/bin
+ExecStart=/usr/bin/env PATH=/usr/local/bin/vllm-docker:/usr/sbin:/usr/bin /usr/local/bin/vllm-docker/dockerd --host=unix:///run/docker.sock --group=root --config-file=/etc/docker/daemon.json
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=5
+TimeoutStartSec=2min
+TimeoutStopSec=2min
+LimitNOFILE=1048576
+TasksMax=infinity
+
+[Install]
+WantedBy=multi-user.target

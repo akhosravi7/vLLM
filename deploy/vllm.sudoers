@@ -1,0 +1,1 @@
+ali ALL=(root) NOPASSWD: /usr/bin/systemctl start vllm.service, /usr/bin/systemctl stop vllm.service, /usr/bin/systemctl restart vllm.service

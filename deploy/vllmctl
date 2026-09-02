@@ -1,0 +1,24 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  start|stop|restart)
+    [[ $# -eq 1 ]] || { printf 'Usage: vllmctl {start|stop|restart|status|logs}\n' >&2; exit 2; }
+    exec /usr/bin/sudo -n /usr/bin/systemctl "$1" vllm.service
+    ;;
+  status)
+    [[ $# -eq 1 ]] || { printf 'Usage: vllmctl {start|stop|restart|status|logs}\n' >&2; exit 2; }
+    exec /usr/bin/systemctl status vllm.service --no-pager
+    ;;
+  logs)
+    shift
+    if [[ $# -eq 0 ]]; then
+      exec /usr/bin/tail -F /var/log/vllm/vllm.log
+    fi
+    exec /usr/bin/tail "$@" -F /var/log/vllm/vllm.log
+    ;;
+  *)
+    printf 'Usage: vllmctl {start|stop|restart|status|logs}\n' >&2
+    exit 2
+    ;;
+esac

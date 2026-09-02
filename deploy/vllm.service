@@ -1,0 +1,35 @@
+[Unit]
+Description=vLLM OpenAI-compatible API
+Requires=vllm-docker.service
+After=vllm-docker.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=ali
+UMask=0027
+WorkingDirectory=/etc/vllm
+Environment=PATH=/usr/local/bin/vllm-docker:/usr/sbin:/usr/bin
+Environment=DOCKER_HOST=unix:///run/docker.sock
+Environment=COMPOSE_PROJECT_NAME=vllm
+ExecStartPre=/usr/bin/chown root:ali /var/log/vllm/vllm.log
+ExecStartPre=/usr/bin/chmod 0640 /var/log/vllm/vllm.log
+ExecStartPre=/usr/bin/python3 /usr/local/bin/vllm-validate-config --input /var/home/ali/vLLM/vllm.env --output /run/vllm/vllm.env --owner-uid 1000
+ExecStartPre=/usr/bin/env -i PATH=/usr/local/bin/vllm-docker:/usr/sbin:/usr/bin DOCKER_HOST=unix:///run/docker.sock COMPOSE_PROJECT_NAME=vllm /usr/local/bin/vllm-docker/docker-compose --env-file /run/vllm/vllm.env -f /etc/vllm/compose.yaml config --quiet
+ExecStart=/usr/bin/env -i PATH=/usr/local/bin/vllm-docker:/usr/sbin:/usr/bin DOCKER_HOST=unix:///run/docker.sock COMPOSE_PROJECT_NAME=vllm /usr/local/bin/vllm-docker/docker-compose --env-file /run/vllm/vllm.env -f /etc/vllm/compose.yaml up --remove-orphans
+ExecStop=/usr/bin/env -i PATH=/usr/local/bin/vllm-docker:/usr/sbin:/usr/bin DOCKER_HOST=unix:///run/docker.sock COMPOSE_PROJECT_NAME=vllm /usr/local/bin/vllm-docker/docker-compose --env-file /run/vllm/vllm.env -f /etc/vllm/compose.yaml down --timeout 30
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=15min
+TimeoutStopSec=2min
+RuntimeDirectory=vllm
+RuntimeDirectoryMode=0700
+LogsDirectory=vllm
+LogsDirectoryMode=0750
+StandardOutput=append:/var/log/vllm/vllm.log
+StandardError=append:/var/log/vllm/vllm.log
+
+[Install]
+WantedBy=multi-user.target

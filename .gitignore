@@ -4,6 +4,9 @@ models/
 # Local Compose configuration.
 .env
 
+# Local validated configuration for the hardened service.
+vllm.env
+
 # Local vLLM/runtime artifacts.
 .cache/
 cache/
