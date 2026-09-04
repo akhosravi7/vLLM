@@ -6,6 +6,10 @@ privilege-separated systemd installation: service definitions and the private
 Docker toolchain are root-owned, while the everyday `ali` account can edit only
 the model files and a strictly validated configuration.
 
+The deployment is pinned to `vllm/vllm-openai:v0.28.0`. Automatic tool calling
+for OpenCode is enabled with the Hermes parser and was verified against the
+running Qwen3 model on 2026-09-04.
+
 The API listens on `127.0.0.1:8000` without an API key. Tailscale Serve exposes
 that loopback endpoint privately to the tailnet.
 
@@ -72,16 +76,29 @@ Accepted settings are:
 - `MAX_MODEL_LEN`
 - `GPU_MEMORY_UTILIZATION`
 - `TENSOR_PARALLEL_SIZE`
+- `PIPELINE_PARALLEL_SIZE`
 - `REASONING_PARSER`
+- `TOKENIZER_MODE`
 - `DTYPE`
+- `LOAD_FORMAT`
 - `KV_CACHE_DTYPE`
+- `SEED`
+- `RENDERER_NUM_WORKERS`
 - `MAX_NUM_SEQS`
 - `MAX_NUM_BATCHED_TOKENS`
 - `CPU_OFFLOAD_GB`
+- `SCHEDULING_POLICY`
+- `UVICORN_LOG_LEVEL`
+- `MAX_LOGPROBS`
+- `OPTIMIZATION_LEVEL`
+- `PERFORMANCE_MODE`
 
 Unknown keys, duplicate keys, whitespace-containing values, unsafe modes,
 symlinks, and out-of-range values are rejected during service startup. There is
-no arbitrary extra-arguments setting. After editing the file, apply it with:
+no arbitrary extra-arguments setting. Options that can change networking,
+authentication, filesystem access, executable or plugin loading, remote-code
+trust, or arbitrary JSON configuration remain fixed in the root-owned
+deployment. After editing the file, apply it with:
 
 ```bash
 vllmctl restart

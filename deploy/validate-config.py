@@ -12,12 +12,22 @@ DEFAULTS = {
     "MAX_MODEL_LEN": "8192",
     "GPU_MEMORY_UTILIZATION": "0.90",
     "TENSOR_PARALLEL_SIZE": "1",
+    "PIPELINE_PARALLEL_SIZE": "1",
     "REASONING_PARSER": "qwen3",
+    "TOKENIZER_MODE": "auto",
     "DTYPE": "auto",
+    "LOAD_FORMAT": "auto",
     "KV_CACHE_DTYPE": "auto",
+    "SEED": "0",
+    "RENDERER_NUM_WORKERS": "1",
     "MAX_NUM_SEQS": "256",
     "MAX_NUM_BATCHED_TOKENS": "8192",
     "CPU_OFFLOAD_GB": "0",
+    "SCHEDULING_POLICY": "fcfs",
+    "UVICORN_LOG_LEVEL": "info",
+    "MAX_LOGPROBS": "20",
+    "OPTIMIZATION_LEVEL": "2",
+    "PERFORMANCE_MODE": "balanced",
 }
 
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}")
@@ -25,8 +35,13 @@ UINT_RE = re.compile(r"[0-9]{1,9}")
 DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]{0,3})(?:\.[0-9]{1,3})?")
 ENUMS = {
     "REASONING_PARSER": {"qwen3", "qwen3_next", "deepseek_r1", "granite"},
+    "TOKENIZER_MODE": {"auto", "hf", "mistral", "slow"},
     "DTYPE": {"auto", "float16", "bfloat16", "float32"},
+    "LOAD_FORMAT": {"auto", "safetensors"},
     "KV_CACHE_DTYPE": {"auto", "fp8", "fp8_e4m3", "fp8_e5m2"},
+    "SCHEDULING_POLICY": {"fcfs", "priority"},
+    "UVICORN_LOG_LEVEL": {"critical", "error", "warning", "info", "debug", "trace"},
+    "PERFORMANCE_MODE": {"balanced", "interactivity", "throughput"},
 }
 
 
@@ -50,9 +65,14 @@ def validate(values: dict[str, str]) -> None:
     bounded_int("MAX_MODEL_LEN", values["MAX_MODEL_LEN"], 128, 1048576)
     bounded_decimal("GPU_MEMORY_UTILIZATION", values["GPU_MEMORY_UTILIZATION"], 0.05, 0.99)
     bounded_int("TENSOR_PARALLEL_SIZE", values["TENSOR_PARALLEL_SIZE"], 1, 8)
+    bounded_int("PIPELINE_PARALLEL_SIZE", values["PIPELINE_PARALLEL_SIZE"], 1, 8)
+    bounded_int("SEED", values["SEED"], 0, 2147483647)
+    bounded_int("RENDERER_NUM_WORKERS", values["RENDERER_NUM_WORKERS"], 1, 64)
     bounded_int("MAX_NUM_SEQS", values["MAX_NUM_SEQS"], 1, 4096)
     bounded_int("MAX_NUM_BATCHED_TOKENS", values["MAX_NUM_BATCHED_TOKENS"], 128, 1048576)
     bounded_decimal("CPU_OFFLOAD_GB", values["CPU_OFFLOAD_GB"], 0.0, 256.0)
+    bounded_int("MAX_LOGPROBS", values["MAX_LOGPROBS"], 0, 100)
+    bounded_int("OPTIMIZATION_LEVEL", values["OPTIMIZATION_LEVEL"], 0, 3)
     for key, choices in ENUMS.items():
         if values[key] not in choices:
             fail(f"{key} must be one of: {', '.join(sorted(choices))}")

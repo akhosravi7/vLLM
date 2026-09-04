@@ -17,7 +17,11 @@ loads code from an `ali`-writable Homebrew directory after installation.
 `vllm.env` is parsed by a strict Python parser. It is not sourced. Unknown keys,
 duplicates, whitespace, shell metacharacters outside the served-name grammar,
 symlinks, unexpected ownership, and group/world-writable modes are rejected.
-There is deliberately no arbitrary `EXTRA_ARGS` setting.
+There is deliberately no arbitrary `EXTRA_ARGS` setting. Common low-risk
+numeric and enum options are exposed through the allowlist documented in the
+top-level README. Networking, authentication, filesystem paths, executable or
+plugin loading, remote-code trust, and arbitrary JSON configuration remain
+fixed in the root-owned deployment.
 
 Before installation, the installer makes timestamped backups of every
 destination that exists. The verified installation, ownership table, operating

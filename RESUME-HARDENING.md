@@ -1,6 +1,31 @@
 # vLLM privilege-separation handoff
 
-Updated: 2026-09-02, America/Chicago
+Updated: 2026-09-04, America/Chicago
+
+## 2026-09-04 vLLM and OpenCode update
+
+The root-owned deployment was updated through a reviewed `guardian` staging
+snapshot from vLLM 0.26.0 to `vllm/vllm-openai:v0.28.0`. The current service
+reports `system_fingerprint: vllm-0.28.0-4495fb3e`.
+
+Automatic tool choice is enabled with the fixed arguments
+`--enable-auto-tool-choice --tool-call-parser hermes`; Qwen3 reasoning parsing
+remains `qwen3`. Local verification passed for `/health`, `/v1/models`, an
+ordinary chat completion, and a real `tool_choice: "auto"` request. The tool
+test returned a structured call with valid JSON arguments and
+`finish_reason: "tool_calls"`. The model remains `Qwen3-32B-AWQ` with maximum
+model length 8192.
+
+The validated user configuration was expanded with conservative settings for
+pipeline parallelism, tokenizer and load modes, seed, renderer workers,
+scheduling, logging, logprob limits, optimization level, and performance mode.
+Networking, authentication, filesystem paths, plugins, remote-code trust, and
+arbitrary JSON/extra arguments remain unavailable to `ali`.
+
+The permission boundary behaved as designed: `ali` could change repository
+staging files and restart the service, but could not overwrite
+`/etc/vllm/compose.yaml`. Changes to root-owned deployment files still require
+review and installation by `guardian`.
 
 ## Session closure
 
@@ -106,7 +131,8 @@ Completed 2026-09-02 after a full fresh login as `ali`.
 - All nine private Docker ELF executables had no interpreter, RPATH, or RUNPATH
   referring to `/home/linuxbrew`.
 - Compose validation resolved the fixed image, loopback-only port, read-only
-  model bind mount, named cache, and only the ten validated settings.
+  model bind mount, named cache, and only the then-current ten validated
+  settings. The allowlist was expanded in the 2026-09-04 update above.
 - Validator tests rejected command substitution, unknown keys, duplicate keys,
   whitespace, out-of-range values, group/world-writable input, and symlinks.
   Valid input produced a mode 0600 output file.

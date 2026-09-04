@@ -26,7 +26,11 @@ The actual model path and all existing networking, TLS, context-length, GPU, and
 Qwen3-32B-AWQ
 ```
 
-After changing the launch arguments, restart the vLLM service using its existing service manager or deployment process.
+On this hardened host, `ali` may edit the reviewed staging sources but cannot
+replace the live root-owned Compose file. An authenticated `guardian` must copy
+`deploy/` to a root-owned staging directory, review it, and run the staged
+installer. After installation, either account may use the existing service
+workflow; `ali` is specifically allowed to run `vllmctl restart`.
 
 ## Why this is required
 
@@ -66,6 +70,22 @@ The larger output allowance is intentional: Qwen3 can consume a substantial numb
 
 ## Tool-calling check
 
-After restarting vLLM, retry OpenCode. If tool calls are still malformed, confirm that `hermes` is a supported tool-call parser in the installed vLLM version and that the active Qwen3 chat template supports Hermes-style tool calls.
+Do not treat an ordinary chat completion as a tool-calling test. Send at least
+one function definition with `tool_choice: "auto"` and request use of that
+function. A successful response has a nonempty `message.tool_calls` array,
+valid JSON in `function.arguments`, and `finish_reason: "tool_calls"`.
+
+This configuration was verified on 2026-09-04 with vLLM 0.28.0 and
+Qwen3-32B-AWQ. A test request selected `get_weather`, emitted
+`{"city": "Chicago"}`, and finished with `tool_calls`. The ordinary completion
+test also returned visible `VLLM_OK` while placing Qwen3's hidden work in the
+separate `reasoning` field.
+
+If tool calls are malformed, confirm that `hermes` remains a supported parser
+and that the active Qwen3 chat template supports Hermes-style tool calls.
+
+When copying command blocks, do not paste prose headings such as `Test chat
+completion:` into Bash; `bash: Test: command not found` is harmless and does
+not indicate a vLLM failure.
 
 Enabling tool parsing does not make the API public. Continue exposing the endpoint only through the existing Tailscale network and do not add public ingress or firewall rules for OpenCode.
