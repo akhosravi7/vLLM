@@ -8,12 +8,12 @@ import stat
 import tempfile
 
 DEFAULTS = {
-    "SERVED_MODEL_NAME": "Qwen3-32B-AWQ",
-    "MAX_MODEL_LEN": "8192",
+    "SERVED_MODEL_NAME": "Qwen2.5-Coder-32B-Instruct-AWQ",
+    "MAX_MODEL_LEN": "30000",
     "GPU_MEMORY_UTILIZATION": "0.90",
     "TENSOR_PARALLEL_SIZE": "1",
     "PIPELINE_PARALLEL_SIZE": "1",
-    "REASONING_PARSER": "qwen3",
+    "REASONING_PARSER": "none",
     "TOKENIZER_MODE": "auto",
     "DTYPE": "auto",
     "LOAD_FORMAT": "auto",
@@ -34,7 +34,7 @@ NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}")
 UINT_RE = re.compile(r"[0-9]{1,9}")
 DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]{0,3})(?:\.[0-9]{1,3})?")
 ENUMS = {
-    "REASONING_PARSER": {"qwen3", "qwen3_next", "deepseek_r1", "granite"},
+    "REASONING_PARSER": {"none", "qwen3", "qwen3_next", "deepseek_r1", "granite"},
     "TOKENIZER_MODE": {"auto", "hf", "mistral", "slow"},
     "DTYPE": {"auto", "float16", "bfloat16", "float32"},
     "LOAD_FORMAT": {"auto", "safetensors"},

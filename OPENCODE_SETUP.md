@@ -15,7 +15,7 @@ For example:
 
 ```bash
 vllm serve /models \
-  --served-model-name Qwen3-32B-AWQ \
+  --served-model-name Qwen2.5-Coder-32B-Instruct-AWQ \
   --enable-auto-tool-choice \
   --tool-call-parser hermes
 ```
@@ -23,7 +23,7 @@ vllm serve /models \
 The actual model path and all existing networking, TLS, context-length, GPU, and Tailscale settings should remain unchanged. The served model name must remain:
 
 ```text
-Qwen3-32B-AWQ
+Qwen2.5-Coder-32B-Instruct-AWQ
 ```
 
 On this hardened host, `ali` may edit the reviewed staging sources but cannot
@@ -59,14 +59,16 @@ curl https://alibazz.tailf4ff3b.ts.net/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer dummy' \
   --data '{
-    "model": "Qwen3-32B-AWQ",
+    "model": "Qwen2.5-Coder-32B-Instruct-AWQ",
     "messages": [{"role": "user", "content": "Reply with exactly: VLLM_OK"}],
     "temperature": 0,
     "max_tokens": 512
   }'
 ```
 
-The larger output allowance is intentional: Qwen3 can consume a substantial number of completion tokens in its reasoning field before emitting visible content.
+The larger output allowance leaves room for a complete answer. The current
+Qwen2.5 configuration uses `REASONING_PARSER=none`, so ordinary output appears
+in `message.content` rather than the separate reasoning field.
 
 ## Tool-calling check
 
@@ -75,14 +77,16 @@ one function definition with `tool_choice: "auto"` and request use of that
 function. A successful response has a nonempty `message.tool_calls` array,
 valid JSON in `function.arguments`, and `finish_reason: "tool_calls"`.
 
-This configuration was verified on 2026-09-04 with vLLM 0.28.0 and
-Qwen3-32B-AWQ. A test request selected `get_weather`, emitted
-`{"city": "Chicago"}`, and finished with `tool_calls`. The ordinary completion
-test also returned visible `VLLM_OK` while placing Qwen3's hidden work in the
-separate `reasoning` field.
+The former Qwen3 checkpoint passed this structured tool-call test on 2026-09-04.
+The current Qwen2.5-Coder-32B-Instruct-AWQ checkpoint does not: with the Hermes
+parser it emits a textual `<tools>` block in `message.content`, leaves
+`message.tool_calls` empty, and finishes with `stop`. Ordinary chat completion
+is verified, but do not consider OpenCode agent operation verified until the
+tool parser and chat template are made compatible.
 
-If tool calls are malformed, confirm that `hermes` remains a supported parser
-and that the active Qwen3 chat template supports Hermes-style tool calls.
+If tool calls are malformed, confirm that the selected parser matches the
+active checkpoint's chat-template tool format. Parser support alone is not
+enough; a successful test must return a structured `message.tool_calls` array.
 
 When copying command blocks, do not paste prose headings such as `Test chat
 completion:` into Bash; `bash: Test: command not found` is harmless and does

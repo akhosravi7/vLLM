@@ -2,7 +2,24 @@
 
 Updated: 2026-09-04, America/Chicago
 
-## 2026-09-04 vLLM and OpenCode update
+## 2026-09-04 Qwen2.5 model and parser update
+
+The active checkpoint is now `Qwen2.5-Coder-32B-Instruct-AWQ`, served with a
+30,000-token limit. Startup measured 33,488 GPU KV-cache tokens, or 1.12x
+maximum concurrency at the configured request length. `/v1/models` reports the
+new name and `max_model_len` 30000.
+
+`REASONING_PARSER=none` is now a safe, validated option. A root-owned entrypoint
+omits `--reasoning-parser` for `none` and appends exactly one argument for a
+named allowlisted parser. After the one-time administrator installation, `ali`
+can switch parsers through `vllm.env` and `vllmctl restart`. An ordinary Qwen2.5
+test returned `OK` in `message.content` with `reasoning: null`.
+
+The current checkpoint's Hermes tool-call test did not produce structured
+`message.tool_calls`; it emitted a textual `<tools>` block. OpenCode agent tool
+use therefore remains unverified and needs a compatible tool parser/template.
+
+## Earlier 2026-09-04 Qwen3 and OpenCode update
 
 The root-owned deployment was updated through a reviewed `guardian` staging
 snapshot from vLLM 0.26.0 to `vllm/vllm-openai:v0.28.0`. The current service
@@ -13,8 +30,10 @@ Automatic tool choice is enabled with the fixed arguments
 remains `qwen3`. Local verification passed for `/health`, `/v1/models`, an
 ordinary chat completion, and a real `tool_choice: "auto"` request. The tool
 test returned a structured call with valid JSON arguments and
-`finish_reason: "tool_calls"`. The model remains `Qwen3-32B-AWQ` with maximum
-model length 8192.
+`finish_reason: "tool_calls"`. The model remains `Qwen3-32B-AWQ`. On
+2026-09-04 its maximum model length was increased from 8,192 to 30,000; the
+fresh startup measured a 31,392-token GPU KV cache (1.05x full-length
+concurrency), and `/v1/models` reported `max_model_len` 30000.
 
 The validated user configuration was expanded with conservative settings for
 pipeline parallelism, tokenizer and load modes, seed, renderer workers,
@@ -144,6 +163,7 @@ Completed 2026-09-02 after a full fresh login as `ali`.
 The human-readable canonical copies are:
 
 - `deploy/compose.yaml`
+- `deploy/vllm-entrypoint.sh`
 - `deploy/vllm.service`
 - `deploy/vllm-docker.service`
 - `deploy/vllm.sudoers`

@@ -8,7 +8,12 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - /var/home/ali/vLLM/models:/models:ro
+      - /etc/vllm/vllm-entrypoint:/etc/vllm/vllm-entrypoint:ro
       - vllm-cache:/root/.cache/vllm
+    entrypoint:
+      - /etc/vllm/vllm-entrypoint
+    environment:
+      REASONING_PARSER: "${REASONING_PARSER}"
     command:
       - --model
       - /models
@@ -25,8 +30,6 @@ services:
       - "${TENSOR_PARALLEL_SIZE}"
       - --pipeline-parallel-size
       - "${PIPELINE_PARALLEL_SIZE}"
-      - --reasoning-parser
-      - "${REASONING_PARSER}"
       - --tokenizer-mode
       - "${TOKENIZER_MODE}"
       - --dtype

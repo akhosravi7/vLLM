@@ -28,6 +28,7 @@ install_root_file() {
 
 for required in \
   "$SOURCE_DIR/compose.yaml" \
+  "$SOURCE_DIR/vllm-entrypoint.sh" \
   "$SOURCE_DIR/validate-config.py" \
   "$SOURCE_DIR/vllm.service" \
   "$SOURCE_DIR/vllm-docker.service" \
@@ -68,6 +69,7 @@ done
 /usr/bin/install -d -o root -g ali -m 0750 /var/log/vllm
 
 install_root_file 0644 "$SOURCE_DIR/compose.yaml" /etc/vllm/compose.yaml
+install_root_file 0755 "$SOURCE_DIR/vllm-entrypoint.sh" /etc/vllm/vllm-entrypoint
 install_root_file 0755 "$SOURCE_DIR/validate-config.py" /usr/local/bin/vllm-validate-config
 install_root_file 0755 "$SOURCE_DIR/patch-runc-rpath.py" /usr/local/bin/vllm-patch-runc-rpath
 install_root_file 0644 "$SOURCE_DIR/vllm.service" /etc/systemd/system/vllm.service

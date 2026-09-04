@@ -23,6 +23,10 @@ top-level README. Networking, authentication, filesystem paths, executable or
 plugin loading, remote-code trust, and arbitrary JSON configuration remain
 fixed in the root-owned deployment.
 
+The root-owned `vllm-entrypoint` maps `REASONING_PARSER=none` to an omitted
+vLLM argument and maps each other allowlisted value to exactly one
+`--reasoning-parser` argument. It never evaluates configuration as shell code.
+
 Before installation, the installer makes timestamped backups of every
 destination that exists. The verified installation, ownership table, operating
 commands, and rollback procedure are documented in `../RESUME-HARDENING.md`.
