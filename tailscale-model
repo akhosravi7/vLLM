@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Select the running model server exposed at this PC's Tailscale HTTPS address.
+set -euo pipefail
+
+case "${1:-status}" in
+  laguna) port=8080 ;;
+  vllm) port=8000 ;;
+  status) exec tailscale serve status ;;
+  *) echo "Usage: $0 {laguna|vllm|status}" >&2; exit 2 ;;
+esac
+
+target="http://127.0.0.1:$port"
+if ! curl --fail --silent --show-error --max-time 5 "$target/health" >/dev/null; then
+  echo "$1 is not ready at $target; Tailscale was not changed." >&2
+  echo "Start the selected server first. Stop the other server to free GPU memory." >&2
+  exit 1
+fi
+
+tailscale serve --bg --yes "$target"

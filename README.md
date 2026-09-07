@@ -1,22 +1,61 @@
-# Qwen2.5-Coder-32B-Instruct-AWQ with vLLM
+# Local model servers on Bazzite
 
-This repository serves a local Qwen2.5-Coder-32B-Instruct-AWQ checkpoint through vLLM's
-OpenAI-compatible API. On the deployed Bazzite host, vLLM runs through a
-privilege-separated systemd installation: service definitions and the private
-Docker toolchain are root-owned, while the everyday `ali` account can edit only
-the model files and a strictly validated configuration.
+This workspace contains two OpenAI-compatible model servers for the RTX 5090:
 
-The deployment is pinned to `vllm/vllm-openai:v0.28.0`. Automatic tool calling
-is enabled with the Hermes parser. The current Qwen2.5 checkpoint emits textual
-`<tools>` blocks that Hermes does not convert into structured `tool_calls`; see
-`OPENCODE_SETUP.md` before relying on agent use.
+| Server | Local API | Model ID |
+| --- | --- | --- |
+| llama-server (rootless Podman) | `http://127.0.0.1:8080/v1` | `laguna-xs-2.1` |
+| vLLM (hardened system service) | `http://127.0.0.1:8000/v1` | `Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` |
 
-The API listens on `127.0.0.1:8000` without an API key. Tailscale Serve exposes
-that loopback endpoint privately to the tailnet.
+As of 2026-09-07, Laguna XS 2.1 Q4_K_M is running and selected through
+Tailscale. See [Laguna setup and validation](laguna/README.md) for pinned
+model/image downloads, GPU settings, and start/stop commands.
+
+## Switching servers and Tailscale
+
+Run these commands from `/var/home/ali/vLLM`:
+
+```bash
+# Switch the running model to Laguna
+vllmctl stop
+./laguna/lagunactl start
+# Once the model is ready:
+./tailscale-model laguna
+
+# Or switch the running model to vLLM
+./laguna/lagunactl stop
+vllmctl start
+# Once the model is ready:
+./tailscale-model vllm
+
+# Inspect the current route
+./tailscale-model status
+```
+
+`tailscale-model` changes only the route and refuses to switch to an unhealthy
+server. Stop one GPU server before starting the other. Both share the private
+Tailscale API URL `https://alibazz.tailf4ff3b.ts.net/v1`; clients must select the
+model ID appropriate to the active server. When Laguna is selected, its web UI
+is at `https://alibazz.tailf4ff3b.ts.net`.
+
+Laguna starts manually and does not start at boot. vLLM's existing enabled boot
+setting was left unchanged. Tailscale retains its selected route across restarts;
+that route works only while the selected backend is running.
+
+## vLLM deployment
+
+vLLM uses `vllm/vllm-openai:v0.28.0` through a privilege-separated systemd
+installation. Service definitions and the private Docker toolchain are
+root-owned; `ali` can edit model files and validated configuration. Local
+configuration currently selects `qwen3_xml` for tool parsing. vLLM was stopped
+and was not revalidated during the Laguna session. See
+[client setup](OPENCODE_SETUP.md) for validation limits.
 
 ## Model files
 
-Place one complete Qwen2.5-Coder-32B-Instruct-AWQ Hugging Face checkpoint directly in `models/`.
+The current Qwen3-Coder checkpoint lives directly in `models/`. Laguna weights
+live separately in `models/laguna-xs-2.1-poolside/`. For vLLM, place a complete
+Hugging Face checkpoint directly in `models/`.
 At minimum, this normally includes `config.json`, tokenizer files, and every
 file referenced by `model.safetensors.index.json`. The directory is excluded
 from Git and mounted read-only inside the container.
@@ -35,8 +74,8 @@ vllmctl logs
 vllmctl logs -n 100
 ```
 
-Startup takes about two minutes for the current five-shard checkpoint. Verify
-the local and tailnet endpoints with:
+Allow time for model loading, then verify the local endpoint. The tailnet
+health check applies to whichever backend `tailscale-model status` reports:
 
 ```bash
 curl --fail http://127.0.0.1:8000/health
@@ -55,7 +94,7 @@ Send a minimal chat request locally:
 curl --fail http://127.0.0.1:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "Qwen2.5-Coder-32B-Instruct-AWQ",
+    "model": "Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit",
     "messages": [{"role": "user", "content": "Reply with: hello"}],
     "max_tokens": 32
   }'
@@ -110,11 +149,9 @@ deployment. After editing the file, apply it with:
 vllmctl restart
 ```
 
-The live limit is 30,000 tokens. With vLLM 0.28.0, the current Qwen2.5 Coder
-checkpoint and 32 GiB RTX 5090 measured a 33,488-token FP16 KV cache, so this
-limit uses most of the available context capacity while retaining about 10.4%
-headroom. `MAX_NUM_BATCHED_TOKENS` may remain lower: it controls scheduler
-prefill work per iteration, not the maximum context accepted by the API.
+The local vLLM configuration sets a 30,000-token limit. Historical KV-cache
+measurements in the handoff notes apply to the checkpoints tested at that time;
+they were not remeasured for the current Qwen3-Coder checkpoint in this session.
 
 If startup fails because the model does not fit, first reduce `MAX_MODEL_LEN`.
 Review the error with `vllmctl logs -n 200`.

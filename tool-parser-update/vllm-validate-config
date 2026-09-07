@@ -9,12 +9,12 @@ import tempfile
 
 DEFAULTS = {
     "TOOL_CALL_PARSER": "hermes",
-    "SERVED_MODEL_NAME": "Qwen2.5-Coder-32B-Instruct-AWQ",
+    "SERVED_MODEL_NAME": "Qwen3-32B-AWQ",
     "MAX_MODEL_LEN": "30000",
     "GPU_MEMORY_UTILIZATION": "0.90",
     "TENSOR_PARALLEL_SIZE": "1",
     "PIPELINE_PARALLEL_SIZE": "1",
-    "REASONING_PARSER": "none",
+    "REASONING_PARSER": "qwen3",
     "TOKENIZER_MODE": "auto",
     "DTYPE": "auto",
     "LOAD_FORMAT": "auto",

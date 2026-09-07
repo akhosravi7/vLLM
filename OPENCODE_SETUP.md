@@ -1,95 +1,59 @@
-# vLLM setup for OpenCode
+# OpenAI-compatible client setup
 
-OpenCode uses the OpenAI-compatible Chat Completions API and sends tool definitions with `tool_choice: "auto"`. The vLLM server must therefore have automatic tool calling enabled.
+## Endpoints
 
-## Required vLLM arguments
+| Setting | Laguna | vLLM |
+| --- | --- | --- |
+| Local base URL | `http://127.0.0.1:8080/v1` | `http://127.0.0.1:8000/v1` |
+| Model ID | `laguna-xs-2.1` | `Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` |
+| Context configured locally | 32,768 | 30,000 |
 
-Keep the existing vLLM launch configuration and add:
+Both use `https://alibazz.tailf4ff3b.ts.net/v1` when selected by
+`./tailscale-model laguna` or `./tailscale-model vllm`. The switcher checks health
+but does not start or stop either backend. See [switching instructions](README.md).
+Use a placeholder such as `local` if a client requires a nonempty API key.
 
-```bash
---enable-auto-tool-choice \
---tool-call-parser hermes
-```
+## Laguna
 
-For example:
+The configured llama-server uses `--jinja` and the model's embedded template.
+Plain chat and structured automatic tool calls passed on 2026-09-07. A test
+returned `finish_reason: "tool_calls"`, a `get_weather` function call, and valid
+JSON arguments. This validates the server API; a full OpenCode agent session
+and a separate remote client have not been tested.
 
-```bash
-vllm serve /models \
-  --served-model-name Qwen2.5-Coder-32B-Instruct-AWQ \
-  --enable-auto-tool-choice \
-  --tool-call-parser hermes
-```
+Thinking is off by default. Per-request
+`"chat_template_kwargs":{"enable_thinking":true}` enables it, with extracted
+text in `reasoning_content`. A reasoning test consumed 4,096 output tokens
+without a final answer; keep thinking off for predictable short responses.
+See [Laguna configuration](laguna/README.md).
 
-The actual model path and all existing networking, TLS, context-length, GPU, and Tailscale settings should remain unchanged. The served model name must remain:
+## vLLM
 
-```text
-Qwen2.5-Coder-32B-Instruct-AWQ
-```
+The local checkpoint/configuration currently selects
+`Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` and `TOOL_CALL_PARSER=qwen3_xml`.
+The existing vLLM deployment was not changed or started during the Laguna
+session. Do not infer that the current vLLM tool parser has been validated from
+older Qwen2.5/Hermes or Qwen3 test results.
 
-On this hardened host, `ali` may edit the reviewed staging sources but cannot
-replace the live root-owned Compose file. An authenticated `guardian` must copy
-`deploy/` to a root-owned staging directory, review it, and run the staged
-installer. After installation, either account may use the existing service
-workflow; `ali` is specifically allowed to run `vllmctl restart`.
+OpenCode sends tool definitions with `tool_choice: "auto"`. The server needs
+`--enable-auto-tool-choice` and a parser compatible with the active checkpoint.
+Verify that a request with a function definition produces a nonempty
+`message.tool_calls` array, valid JSON `function.arguments`, and
+`finish_reason: "tool_calls"`. Ordinary chat alone does not verify agent use.
 
-## Why this is required
+The hardened installation workflow for live vLLM changes remains documented
+in [deploy/README-install.md](deploy/README-install.md).
 
-Without these options, ordinary `/v1/chat/completions` calls work, but OpenCode agent requests fail with HTTP 400:
+## Connectivity check
 
-```text
-"auto" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set
-```
-
-Tool calling is required for OpenCode to inspect files, edit files, and run shell commands or tests.
-
-## Connectivity checks
-
-These commands should be run from a machine connected to the same Tailscale network.
-
-List models:
-
-```bash
-curl https://alibazz.tailf4ff3b.ts.net/v1/models
-```
-
-Test chat completions:
+From a device connected to the tailnet, with Laguna selected:
 
 ```bash
-curl https://alibazz.tailf4ff3b.ts.net/v1/chat/completions \
+curl --fail https://alibazz.tailf4ff3b.ts.net/v1/models
+curl --fail https://alibazz.tailf4ff3b.ts.net/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer dummy' \
-  --data '{
-    "model": "Qwen2.5-Coder-32B-Instruct-AWQ",
-    "messages": [{"role": "user", "content": "Reply with exactly: VLLM_OK"}],
-    "temperature": 0,
-    "max_tokens": 512
-  }'
+  --data '{"model":"laguna-xs-2.1","messages":[{"role":"user","content":"Reply with exactly: READY"}],"max_tokens":128,"chat_template_kwargs":{"enable_thinking":false}}'
 ```
 
-The larger output allowance leaves room for a complete answer. The current
-Qwen2.5 configuration uses `REASONING_PARSER=none`, so ordinary output appears
-in `message.content` rather than the separate reasoning field.
-
-## Tool-calling check
-
-Do not treat an ordinary chat completion as a tool-calling test. Send at least
-one function definition with `tool_choice: "auto"` and request use of that
-function. A successful response has a nonempty `message.tool_calls` array,
-valid JSON in `function.arguments`, and `finish_reason: "tool_calls"`.
-
-The former Qwen3 checkpoint passed this structured tool-call test on 2026-09-04.
-The current Qwen2.5-Coder-32B-Instruct-AWQ checkpoint does not: with the Hermes
-parser it emits a textual `<tools>` block in `message.content`, leaves
-`message.tool_calls` empty, and finishes with `stop`. Ordinary chat completion
-is verified, but do not consider OpenCode agent operation verified until the
-tool parser and chat template are made compatible.
-
-If tool calls are malformed, confirm that the selected parser matches the
-active checkpoint's chat-template tool format. Parser support alone is not
-enough; a successful test must return a structured `message.tool_calls` array.
-
-When copying command blocks, do not paste prose headings such as `Test chat
-completion:` into Bash; `bash: Test: command not found` is harmless and does
-not indicate a vLLM failure.
-
-Enabling tool parsing does not make the API public. Continue exposing the endpoint only through the existing Tailscale network and do not add public ingress or firewall rules for OpenCode.
+When vLLM is selected, use its model ID from `/v1/models`. The Tailscale route
+is private to the tailnet.

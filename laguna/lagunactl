@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGE='ghcr.io/ggml-org/llama.cpp@sha256:a77f3bea9d62f6187ebb6ca8deb1a03aebeeb1ed7a832ac94663ff5c7815da63'
+NAME=llama-laguna
+MODEL=Laguna-XS-2.1-Q4_K_M.gguf
+MODEL_DIR="$ROOT/models/laguna-xs-2.1-poolside"
+
+case "${1:-status}" in
+  start)
+    if podman container exists "$NAME"; then
+      exec podman start "$NAME"
+    fi
+    test -f "$MODEL_DIR/$MODEL" || {
+      echo "Missing model: $MODEL_DIR/$MODEL" >&2
+      exit 1
+    }
+    exec podman run -d --name "$NAME" --pull=never \
+      --device nvidia.com/gpu=all --security-opt label=disable \
+      --cap-drop=all --security-opt no-new-privileges \
+      -e NVIDIA_VISIBLE_DEVICES=void \
+      -p 127.0.0.1:8080:8080 \
+      -v "$MODEL_DIR:/models:ro" \
+      "$IMAGE" \
+      --model "/models/$MODEL" --alias laguna-xs-2.1 \
+      --host 0.0.0.0 --port 8080 \
+      --cors-origins 'http://127.0.0.1:8080,http://localhost:8080,https://alibazz.tailf4ff3b.ts.net' \
+      --n-gpu-layers 99 --ctx-size 32768 --parallel 1 \
+      --flash-attn on --jinja \
+      --temp 1.0 --top-k 20 --top-p 1.0 --min-p 0.0
+    ;;
+  stop) exec podman stop --time 30 "$NAME" ;;
+  restart) exec podman restart --time 30 "$NAME" ;;
+  status) exec podman ps -a --filter "name=^${NAME}$" ;;
+  logs) exec podman logs --tail 100 "$NAME" ;;
+  follow) exec podman logs --tail 100 -f "$NAME" ;;
+  *) echo "Usage: $0 {start|stop|restart|status|logs|follow}" >&2; exit 2 ;;
+esac

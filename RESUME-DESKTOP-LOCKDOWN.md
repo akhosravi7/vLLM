@@ -1,5 +1,12 @@
 # Resume: Flatpak, NetworkManager, and Tailscale lockdown
 
+> Current operational update (2026-09-07): Laguna XS 2.1 now runs through
+> rootless Podman on localhost:8080, and Tailscale currently selects it.
+> `./tailscale-model {laguna|vllm|status}` manages the shared HTTPS route.
+> Laguna remains manual; vLLM's enabled boot setting is unchanged.
+> See [README.md](README.md) and [laguna/README.md](laguna/README.md).
+> The dated deployment and model details below are historical snapshots.
+
 Updated: 2026-09-02, America/Chicago
 
 ## Current state
