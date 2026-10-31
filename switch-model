@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+wait_health() {
+  local name="$1" url="$2" timeout="${3:-900}" start=$SECONDS
+  printf 'Waiting for %s at %s ...\n' "$name" "$url" >&2
+  while (( SECONDS - start < timeout )); do
+    if curl --fail --silent --show-error --max-time 3 "$url" >/dev/null 2>&1; then
+      printf '%s is ready.\n' "$name" >&2
+      return 0
+    fi
+    sleep 5
+  done
+  printf '%s did not become healthy within %s seconds.\n' "$name" "$timeout" >&2
+  return 1
+}
+
+stop_asr() { ./kotoba/kotoba-asrctl stop >/dev/null 2>&1 || true; }
+stop_laguna() { ./laguna/lagunactl stop >/dev/null 2>&1 || true; }
+stop_vllm() { vllmctl stop; }
+
+case "${1:-}" in
+  asr)
+    stop_vllm
+    stop_laguna
+    ./kotoba/kotoba-asrctl start
+    wait_health asr http://127.0.0.1:8001/health 900
+    ./tailscale-model asr
+    ;;
+  vllm)
+    stop_asr
+    stop_laguna
+    vllmctl start
+    wait_health vllm http://127.0.0.1:8000/health 900
+    ./tailscale-model vllm
+    ;;
+  laguna)
+    stop_asr
+    stop_vllm
+    ./laguna/lagunactl start
+    wait_health laguna http://127.0.0.1:8080/health 900
+    ./tailscale-model laguna
+    ;;
+  status)
+    ./tailscale-model status
+    printf '\n'
+    podman ps -a --filter 'name=^(kotoba-asr|llama-laguna)$' --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+    printf '\n'
+    printf 'vLLM: %s\n' "$(systemctl is-active vllm.service 2>/dev/null || true)"
+    ;;
+  *)
+    echo "Usage: $0 {asr|vllm|laguna|status}" >&2
+    exit 2
+    ;;
+esac

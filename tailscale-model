@@ -5,15 +5,30 @@ set -euo pipefail
 case "${1:-status}" in
   laguna) port=8080 ;;
   vllm) port=8000 ;;
+  asr) port=8001 ;;
   status) exec tailscale serve status ;;
-  *) echo "Usage: $0 {laguna|vllm|status}" >&2; exit 2 ;;
+  *) echo "Usage: $0 {laguna|vllm|asr|status}" >&2; exit 2 ;;
 esac
 
 target="http://127.0.0.1:$port"
 if ! curl --fail --silent --show-error --max-time 5 "$target/health" >/dev/null; then
   echo "$1 is not ready at $target; Tailscale was not changed." >&2
-  echo "Start the selected server first. Stop the other server to free GPU memory." >&2
+  echo "Start the selected server first, e.g. ./switch-model $1." >&2
   exit 1
 fi
 
-tailscale serve --bg --yes "$target"
+if ! output="$(tailscale serve --bg --yes "$target" 2>&1)"; then
+  if grep -qi 'access denied' <<<"$output"; then
+    if sudo -n tailscale set --operator="$USER" >/dev/null 2>&1; then
+      output="$(tailscale serve --bg --yes "$target" 2>&1)" || { printf '%s\n' "$output" >&2; exit 1; }
+    else
+      printf '%s\n' "$output" >&2
+      echo "Run once: sudo tailscale set --operator=\$USER" >&2
+      exit 1
+    fi
+  else
+    printf '%s\n' "$output" >&2
+    exit 1
+  fi
+fi
+printf '%s\n' "$output"

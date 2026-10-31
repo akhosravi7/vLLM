@@ -1,42 +1,61 @@
 # Local model servers on Bazzite
 
-This workspace contains two OpenAI-compatible model servers for the RTX 5090:
+This workspace contains three OpenAI-compatible model servers for the RTX 5090:
 
 | Server | Local API | Model ID |
 | --- | --- | --- |
 | llama-server (rootless Podman) | `http://127.0.0.1:8080/v1` | `laguna-xs-2.1` |
 | vLLM (hardened system service) | `http://127.0.0.1:8000/v1` | `Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` |
+| Speaches ASR (rootless Podman) | `http://127.0.0.1:8001/v1` | `kotoba-tech/kotoba-whisper-v2.0-faster` |
 
-As of 2026-09-07, Laguna XS 2.1 Q4_K_M is running and selected through
-Tailscale. See [Laguna setup and validation](laguna/README.md) for pinned
-model/image downloads, GPU settings, and start/stop commands.
+Only one GPU-backed server runs at a time. Use `./switch-model` to stop the
+current server and start another. As of 2026-09-07, Laguna XS 2.1 Q4_K_M is
+running and selected through Tailscale. See
+[Laguna setup and validation](laguna/README.md) for pinned model/image
+downloads, GPU settings, and start/stop commands.
 
 ## Switching servers and Tailscale
 
 Run these commands from `/var/home/ali/vLLM`:
 
 ```bash
-# Switch the running model to Laguna
+# Stop the other GPU servers, start the selected one, wait for health,
+# then point the Tailscale route at it.
+./switch-model asr
+./switch-model vllm
+./switch-model laguna
+
+# Inspect the current route and running containers
+./switch-model status
+```
+
+`switch-model` uses the existing passwordless `vllmctl` helper for the system
+vLLM service. The older manual sequence is still available:
+
+```bash
+# Laguna
 vllmctl stop
 ./laguna/lagunactl start
-# Once the model is ready:
 ./tailscale-model laguna
 
-# Or switch the running model to vLLM
+# vLLM
 ./laguna/lagunactl stop
 vllmctl start
-# Once the model is ready:
 ./tailscale-model vllm
 
-# Inspect the current route
-./tailscale-model status
+# ASR
+vllmctl stop
+./laguna/lagunactl stop
+./kotoba/kotoba-asrctl start
+./tailscale-model asr
 ```
 
 `tailscale-model` changes only the route and refuses to switch to an unhealthy
-server. Stop one GPU server before starting the other. Both share the private
+server. Stop one GPU server before starting another. All three share the private
 Tailscale API URL `https://alibazz.tailf4ff3b.ts.net/v1`; clients must select the
 model ID appropriate to the active server. When Laguna is selected, its web UI
-is at `https://alibazz.tailf4ff3b.ts.net`.
+is at `https://alibazz.tailf4ff3b.ts.net`. When ASR is selected, use
+`/v1/audio/transcriptions` on that base URL.
 
 Laguna starts manually and does not start at boot. vLLM's existing enabled boot
 setting was left unchanged. Tailscale retains its selected route across restarts;
@@ -51,6 +70,87 @@ configuration currently selects `qwen3_xml` for tool parsing. vLLM was stopped
 and was not revalidated during the Laguna session. See
 [client setup](OPENCODE_SETUP.md) for validation limits.
 
+## Japanese transcription
+
+The ASR server is [Speaches](https://speaches.ai/) running the CTranslate2 build
+of [kotoba-whisper-v2.0](https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0-faster)
+through rootless Podman. It is GPU-backed and uses the same switch flow:
+
+```bash
+./switch-model asr
+./kotoba/transcribe --text recording.m4a
+./kotoba/transcribe recording.m4a | jq -r .text
+```
+
+`transcribe` defaults to `language=ja`. Use
+`./kotoba/transcribe AUDIO LANG` for another language. The OpenAI-compatible
+endpoint is:
+
+```bash
+curl --fail http://127.0.0.1:8001/v1/audio/transcriptions \
+  -F file=@recording.m4a \
+  -F model=kotoba-tech/kotoba-whisper-v2.0-faster \
+  -F language=ja \
+  -F response_format=verbose_json
+```
+
+The container is named `kotoba-asr`, listens on `127.0.0.1:8001`, and is
+controlled with:
+
+```bash
+./kotoba/kotoba-asrctl start
+./kotoba/kotoba-asrctl status
+./kotoba/kotoba-asrctl logs
+./kotoba/kotoba-asrctl stop
+```
+
+The model is downloaded on first start into the `kotoba-hf-cache` Podman volume.
+Remove it with `podman volume rm kotoba-hf-cache` to reclaim the space or force a
+fresh download. The image is pinned by digest in `kotoba/kotoba-asrctl`. It uses
+`WHISPER__COMPUTE_TYPE=float16` because CTranslate2's int8 CUDA kernels do not
+work on RTX 50-series cards; the ONNX voice-activity detector is forced to CPU
+because its CUDA provider can crash on this host.
+
+## Japanese mode (ASR + translation together)
+
+`japanese-mode` runs the ASR server and a separate translation LLM at the same
+time. It does not touch the hardened vLLM service or `vllm.env`.
+
+```bash
+./japanese/japanese-mode          # start both, default action
+./japanese/japanese-mode status
+./japanese/japanese-mode logs     # translation model logs
+./japanese/japanese-mode asr-logs # ASR logs
+./japanese/japanese-mode stop
+```
+
+The translation model is
+[Qwen2.5-7B-Instruct Q4_K_M](https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF)
+served by rootless Podman llama.cpp, the same pinned image as Laguna. On first
+start it downloads to `models/qwen2.5-7b-instruct/`. Both endpoints are
+OpenAI-compatible:
+
+- Transcription: `http://127.0.0.1:8001/v1/audio/transcriptions`
+- Translation: `http://127.0.0.1:8002/v1/chat/completions`, model
+  `qwen2.5-7b-instruct`
+
+Example translation request after transcription:
+
+```bash
+curl --fail http://127.0.0.1:8002/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "qwen2.5-7b-instruct",
+    "messages": [{"role": "user", "content": "Translate to English. Reply with only the translation:\nこんにちは。"}],
+    "max_tokens": 256,
+    "temperature": 0.2
+  }'
+```
+
+Japanese mode is independent of `switch-model`; run it directly. It will fail
+cleanly if another GPU server is holding the memory, so stop vLLM first with
+`vllmctl stop`.
+
 ## Model files
 
 The current Qwen3-Coder checkpoint lives directly in `models/`. Laguna weights
@@ -58,7 +158,8 @@ live separately in `models/laguna-xs-2.1-poolside/`. For vLLM, place a complete
 Hugging Face checkpoint directly in `models/`.
 At minimum, this normally includes `config.json`, tokenizer files, and every
 file referenced by `model.safetensors.index.json`. The directory is excluded
-from Git and mounted read-only inside the container.
+from Git and mounted read-only inside the container. The ASR weights are not in
+`models/`; Speaches keeps them in the `kotoba-hf-cache` Podman volume.
 
 ## Day-to-day operation on the hardened host
 
@@ -132,6 +233,10 @@ Accepted settings are:
 - `MAX_LOGPROBS`
 - `OPTIMIZATION_LEVEL`
 - `PERFORMANCE_MODE`
+
+These settings apply only to the vLLM service. The ASR service is configured
+directly in `kotoba/kotoba-asrctl`; it does not use `vllm.env` or the hardened
+vLLM deployment.
 
 Set `REASONING_PARSER=none` for models such as Qwen2.5 that do not emit a
 separate reasoning stream. Named parsers remain strictly allowlisted. Changing

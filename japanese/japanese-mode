@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+IMAGE='ghcr.io/ggml-org/llama.cpp@sha256:a77f3bea9d62f6187ebb6ca8deb1a03aebeeb1ed7a832ac94663ff5c7815da63'
+NAME=llama-translate
+PORT=8002
+ALIAS=qwen2.5-7b-instruct
+MODEL=Qwen2.5-7B-Instruct-Q4_K_M.gguf
+MODEL_DIR="$ROOT/models/qwen2.5-7b-instruct"
+MODEL_URL="https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/$MODEL"
+ASR_URL=http://127.0.0.1:8001
+LLM_URL="http://127.0.0.1:$PORT"
+
+llm_running() {
+  podman container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null | grep -qx true
+}
+
+ensure_model() {
+  mkdir -p "$MODEL_DIR"
+  if [[ -f "$MODEL_DIR/$MODEL" ]]; then
+    return 0
+  fi
+  echo "Downloading $MODEL (about 4.4 GiB) to $MODEL_DIR ..." >&2
+  curl --fail --location --retry 3 --retry-delay 5 \
+    --output "$MODEL_DIR/$MODEL.part" "$MODEL_URL"
+  mv "$MODEL_DIR/$MODEL.part" "$MODEL_DIR/$MODEL"
+}
+
+require_gpu_free() {
+  local need="$1" free
+  free="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 || true)"
+  if [[ -z "$free" ]]; then
+    echo "nvidia-smi did not report a GPU; cannot start the translation model." >&2
+    exit 1
+  fi
+  if (( free < need )); then
+    echo "Only ${free} MiB of GPU memory is free; at least ${need} MiB is needed." >&2
+    echo "Stop the other GPU server first, e.g. vllmctl stop." >&2
+    exit 1
+  fi
+}
+
+wait_health() {
+  local name="$1" url="$2" timeout="${3:-900}" start=$SECONDS
+  printf 'Waiting for %s at %s ...\n' "$name" "$url" >&2
+  while (( SECONDS - start < timeout )); do
+    if curl --fail --silent --show-error --max-time 3 "$url" >/dev/null 2>&1; then
+      printf '%s is ready.\n' "$name" >&2
+      return 0
+    fi
+    sleep 5
+  done
+  printf '%s did not become healthy within %s seconds.\n' "$name" "$timeout" >&2
+  return 1
+}
+
+start_llm() {
+  if llm_running; then
+    echo "$NAME is already running." >&2
+    return 0
+  fi
+  ensure_model
+  require_gpu_free 8192
+  if podman container exists "$NAME"; then
+    podman start "$NAME" >/dev/null
+    return 0
+  fi
+  podman run -d --name "$NAME" --pull=never \
+    --device nvidia.com/gpu=all \
+    --security-opt label=disable \
+    --cap-drop=all \
+    --security-opt no-new-privileges \
+    -e NVIDIA_VISIBLE_DEVICES=void \
+    -p "127.0.0.1:${PORT}:${PORT}" \
+    -v "$MODEL_DIR:/models:ro" \
+    "$IMAGE" \
+    --model "/models/$MODEL" --alias "$ALIAS" \
+    --host 0.0.0.0 --port "$PORT" \
+    --n-gpu-layers 99 --ctx-size 8192 --parallel 1 \
+    --flash-attn on --jinja \
+    --temp 0.3 --top-p 0.9
+}
+
+start_all() {
+  ./kotoba/kotoba-asrctl start
+  start_llm
+  wait_health asr "$ASR_URL/health" 900
+  wait_health translate "$LLM_URL/health" 900
+  printf '\nJapanese mode is ready:\n'
+  printf '  Transcription: %s/v1/audio/transcriptions\n' "$ASR_URL"
+  printf '  Translation:   %s/v1/chat/completions (model %s)\n' "$LLM_URL" "$ALIAS"
+}
+
+stop_all() {
+  podman stop --time 30 "$NAME" >/dev/null 2>&1 || true
+  ./kotoba/kotoba-asrctl stop >/dev/null 2>&1 || true
+}
+
+case "${1:-start}" in
+  start) start_all ;;
+  stop) stop_all ;;
+  restart) stop_all; start_all ;;
+  status)
+    podman ps -a --filter "name=^(kotoba-asr|${NAME})$" \
+      --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+    ;;
+  logs) exec podman logs --tail 100 "$NAME" ;;
+  follow) exec podman logs --tail 100 -f "$NAME" ;;
+  asr-logs) exec podman logs --tail 100 kotoba-asr ;;
+  asr-follow) exec podman logs --tail 100 -f kotoba-asr ;;
+  *) echo "Usage: $0 {start|stop|restart|status|logs|follow|asr-logs|asr-follow}" >&2; exit 2 ;;
+esac

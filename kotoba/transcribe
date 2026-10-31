@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+model='kotoba-tech/kotoba-whisper-v2.0-faster'
+base="${ASR_URL:-http://127.0.0.1:8001}"
+
+mode=json
+if [[ "${1:-}" == "--text" ]]; then
+  mode=text
+  shift
+fi
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 [--text] AUDIO_FILE [LANGUAGE]" >&2
+  exit 2
+fi
+file="$1"
+language="${2:-ja}"
+[[ -f "$file" ]] || { echo "No such file: $file" >&2; exit 1; }
+
+if [[ "$mode" == text ]]; then
+  curl --fail --silent --show-error \
+    -F "file=@${file}" \
+    -F "model=${model}" \
+    -F "language=${language}" \
+    -F 'response_format=json' \
+    "${base}/v1/audio/transcriptions" | jq -r '.text'
+else
+  curl --fail --silent --show-error \
+    -F "file=@${file}" \
+    -F "model=${model}" \
+    -F "language=${language}" \
+    -F 'response_format=verbose_json' \
+    "${base}/v1/audio/transcriptions"
+fi

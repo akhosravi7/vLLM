@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE='ghcr.io/speaches-ai/speaches@sha256:f4eb14d1c53b19c5bd1f76d10ea9fc10288ceaf82dca09506d3f0ef92ee943de'
+NAME=kotoba-asr
+PORT=8001
+MODEL='kotoba-tech/kotoba-whisper-v2.0-faster'
+VOLUME=kotoba-hf-cache
+
+running() {
+  podman container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null | grep -qx true
+}
+
+require_gpu_free() {
+  local free
+  free="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 || true)"
+  if [[ -z "$free" ]]; then
+    echo "nvidia-smi did not report a GPU; cannot start the ASR service." >&2
+    exit 1
+  fi
+  if (( free < 4096 )); then
+    echo "Only ${free} MiB of GPU memory is free; at least 4096 MiB is needed." >&2
+    echo "Stop the other GPU server first, e.g. ./switch-model asr or vllmctl stop." >&2
+    exit 1
+  fi
+}
+
+case "${1:-status}" in
+  start)
+    if running; then
+      echo "$NAME is already running." >&2
+      exit 0
+    fi
+    if ! podman image exists "$IMAGE"; then
+      podman pull "$IMAGE"
+    fi
+    require_gpu_free
+    podman volume create "$VOLUME" >/dev/null 2>&1 || true
+    if podman container exists "$NAME"; then
+      exec podman start "$NAME"
+    fi
+    exec podman run -d --name "$NAME" --pull=never \
+      --device nvidia.com/gpu=all \
+      --security-opt label=disable \
+      --cap-drop=all \
+      --security-opt no-new-privileges \
+      -e NVIDIA_VISIBLE_DEVICES=void \
+      -e UVICORN_HOST=0.0.0.0 \
+      -e UVICORN_PORT="$PORT" \
+      -e WHISPER__INFERENCE_DEVICE=cuda \
+      -e WHISPER__COMPUTE_TYPE=float16 \
+      -e STT_MODEL_TTL=-1 \
+      -e LOG_LEVEL=info \
+      -e ENABLE_UI=false \
+      -e "PRELOAD_MODELS=[\"$MODEL\"]" \
+      -e 'UNSTABLE_ORT_OPTS={"exclude_providers":["TensorrtExecutionProvider","CUDAExecutionProvider"]}' \
+      -p "127.0.0.1:${PORT}:${PORT}" \
+      -v "${VOLUME}:/home/ubuntu/.cache/huggingface" \
+      --health-cmd "curl -fsS http://127.0.0.1:${PORT}/health || exit 1" \
+      --health-interval 30s \
+      --health-timeout 5s \
+      --health-retries 3 \
+      --health-start-period 300s \
+      "$IMAGE"
+    ;;
+  stop) exec podman stop --time 30 "$NAME" ;;
+  restart) exec podman restart --time 30 "$NAME" ;;
+  status) exec podman ps -a --filter "name=^${NAME}$" ;;
+  logs) exec podman logs --tail 100 "$NAME" ;;
+  follow) exec podman logs --tail 100 -f "$NAME" ;;
+  *) echo "Usage: $0 {start|stop|restart|status|logs|follow}" >&2; exit 2 ;;
+esac

@@ -2,16 +2,18 @@
 
 ## Endpoints
 
-| Setting | Laguna | vLLM |
-| --- | --- | --- |
-| Local base URL | `http://127.0.0.1:8080/v1` | `http://127.0.0.1:8000/v1` |
-| Model ID | `laguna-xs-2.1` | `Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` |
-| Context configured locally | 32,768 | 30,000 |
+| Setting | Laguna | vLLM | Speaches ASR |
+| --- | --- | --- | --- |
+| Local base URL | `http://127.0.0.1:8080/v1` | `http://127.0.0.1:8000/v1` | `http://127.0.0.1:8001/v1` |
+| Model ID | `laguna-xs-2.1` | `Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` | `kotoba-tech/kotoba-whisper-v2.0-faster` |
+| Context configured locally | 32,768 | 30,000 | n/a |
 
-Both use `https://alibazz.tailf4ff3b.ts.net/v1` when selected by
-`./tailscale-model laguna` or `./tailscale-model vllm`. The switcher checks health
-but does not start or stop either backend. See [switching instructions](README.md).
-Use a placeholder such as `local` if a client requires a nonempty API key.
+All three use `https://alibazz.tailf4ff3b.ts.net/v1` when selected by
+`./switch-model ...` or `./tailscale-model ...`. The tailnet switcher only
+changes the route; `./switch-model` also stops the other GPU servers, starts the
+selected one, and waits for health. See
+[switching instructions](README.md). Use a placeholder such as `local` if a
+client requires a nonempty API key.
 
 ## Laguna
 
@@ -44,6 +46,30 @@ Verify that a request with a function definition produces a nonempty
 The hardened installation workflow for live vLLM changes remains documented
 in [deploy/README-install.md](deploy/README-install.md).
 
+## Japanese transcription
+
+The ASR service is a separate Speaches container, not a vLLM model. Switch to it
+with:
+
+```bash
+./switch-model asr
+./kotoba/transcribe --text recording.m4a
+```
+
+The OpenAI-compatible transcription endpoint is:
+
+```bash
+curl --fail http://127.0.0.1:8001/v1/audio/transcriptions \
+  -F file=@recording.m4a \
+  -F model=kotoba-tech/kotoba-whisper-v2.0-faster \
+  -F language=ja \
+  -F response_format=verbose_json
+```
+
+OpenCode itself only consumes chat models; use this endpoint from your own
+transcription script or an OpenAI-compatible client. Switch back to a chat model
+with `./switch-model vllm` or `./switch-model laguna`.
+
 ## Connectivity check
 
 From a device connected to the tailnet, with Laguna selected:
@@ -55,5 +81,7 @@ curl --fail https://alibazz.tailf4ff3b.ts.net/v1/chat/completions \
   --data '{"model":"laguna-xs-2.1","messages":[{"role":"user","content":"Reply with exactly: READY"}],"max_tokens":128,"chat_template_kwargs":{"enable_thinking":false}}'
 ```
 
-When vLLM is selected, use its model ID from `/v1/models`. The Tailscale route
-is private to the tailnet.
+When vLLM is selected, use its model ID from `/v1/models`. When ASR is selected,
+the same base URL serves `/v1/audio/transcriptions`; `/v1/models` lists
+`kotoba-tech/kotoba-whisper-v2.0-faster`. The Tailscale route is private to the
+tailnet.
