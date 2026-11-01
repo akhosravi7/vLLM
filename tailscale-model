@@ -2,33 +2,51 @@
 # Select the running model server exposed at this PC's Tailscale HTTPS address.
 set -euo pipefail
 
+serve() {
+  local output
+  if ! output="$(tailscale serve --bg --yes "$@" 2>&1)"; then
+    if grep -qi 'access denied' <<<"$output"; then
+      if sudo -n tailscale set --operator="$USER" >/dev/null 2>&1; then
+        output="$(tailscale serve --bg --yes "$@" 2>&1)" || { printf '%s\n' "$output" >&2; exit 1; }
+      else
+        printf '%s\n' "$output" >&2
+        echo "Run once: sudo tailscale set --operator=\$USER" >&2
+        exit 1
+      fi
+    else
+      printf '%s\n' "$output" >&2
+      exit 1
+    fi
+  fi
+  printf '%s\n' "$output"
+}
+
+require_health() {
+  local port="$1" hint="$2"
+  if ! curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:$port/health" >/dev/null; then
+    echo "$hint is not ready at http://127.0.0.1:$port; Tailscale was not changed." >&2
+    echo "Start it first, e.g. $3." >&2
+    exit 1
+  fi
+}
+
 case "${1:-status}" in
   laguna) port=8080 ;;
   vllm) port=8000 ;;
   asr) port=8001 ;;
+  japanese)
+    require_health 8001 "Japanese ASR" "./japanese/japanese-mode"
+    require_health 8002 "Japanese translation" "./japanese/japanese-mode"
+    tailscale serve reset >/dev/null 2>&1 || true
+    serve http://127.0.0.1:8001
+    serve --set-path /v1/models http://127.0.0.1:8002/v1/models
+    serve --set-path /v1/chat/completions http://127.0.0.1:8002/v1/chat/completions
+    exit 0
+    ;;
   status) exec tailscale serve status ;;
-  *) echo "Usage: $0 {laguna|vllm|asr|status}" >&2; exit 2 ;;
+  *) echo "Usage: $0 {laguna|vllm|asr|japanese|status}" >&2; exit 2 ;;
 esac
 
-target="http://127.0.0.1:$port"
-if ! curl --fail --silent --show-error --max-time 5 "$target/health" >/dev/null; then
-  echo "$1 is not ready at $target; Tailscale was not changed." >&2
-  echo "Start the selected server first, e.g. ./switch-model $1." >&2
-  exit 1
-fi
-
-if ! output="$(tailscale serve --bg --yes "$target" 2>&1)"; then
-  if grep -qi 'access denied' <<<"$output"; then
-    if sudo -n tailscale set --operator="$USER" >/dev/null 2>&1; then
-      output="$(tailscale serve --bg --yes "$target" 2>&1)" || { printf '%s\n' "$output" >&2; exit 1; }
-    else
-      printf '%s\n' "$output" >&2
-      echo "Run once: sudo tailscale set --operator=\$USER" >&2
-      exit 1
-    fi
-  else
-    printf '%s\n' "$output" >&2
-    exit 1
-  fi
-fi
-printf '%s\n' "$output"
+require_health "$port" "$1" "./switch-model $1"
+tailscale serve reset >/dev/null 2>&1 || true
+serve "http://127.0.0.1:$port"

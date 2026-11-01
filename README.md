@@ -51,11 +51,16 @@ vllmctl stop
 ```
 
 `tailscale-model` changes only the route and refuses to switch to an unhealthy
-server. Stop one GPU server before starting another. All three share the private
-Tailscale API URL `https://alibazz.tailf4ff3b.ts.net/v1`; clients must select the
-model ID appropriate to the active server. When Laguna is selected, its web UI
-is at `https://alibazz.tailf4ff3b.ts.net`. When ASR is selected, use
-`/v1/audio/transcriptions` on that base URL.
+server. Stop one GPU server before starting another. The three single-server
+routes share the private Tailscale API URL `https://alibazz.tailf4ff3b.ts.net/v1`;
+clients must select the model ID appropriate to the active server. When Laguna is
+selected, its web UI is at `https://alibazz.tailf4ff3b.ts.net`. When ASR is
+selected, use `/v1/audio/transcriptions` on that base URL.
+
+Japanese mode uses `./tailscale-model japanese`: ASR stays at the root, while
+`/v1/models` and `/v1/chat/completions` are routed to the translation server.
+That makes chat clients such as Reins discover `qwen2.5-7b-instruct` while
+transcription keeps working on the same base URL.
 
 Laguna starts manually and does not start at boot. vLLM's existing enabled boot
 setting was left unchanged. Tailscale retains its selected route across restarts;
@@ -117,7 +122,8 @@ because its CUDA provider can crash on this host.
 time. It does not touch the hardened vLLM service or `vllm.env`.
 
 ```bash
-./japanese/japanese-mode          # start both, default action
+./japanese/japanese-mode          # start both and select the Tailscale route
+./tailscale-model japanese        # re-select the route without restarting
 ./japanese/japanese-mode status
 ./japanese/japanese-mode logs     # translation model logs
 ./japanese/japanese-mode asr-logs # ASR logs
@@ -125,14 +131,35 @@ time. It does not touch the hardened vLLM service or `vllm.env`.
 ```
 
 The translation model is
-[Qwen2.5-7B-Instruct Q4_K_M](https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF)
+[Qwen2.5-32B-Instruct Q5_K_M](https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF)
 served by rootless Podman llama.cpp, the same pinned image as Laguna. On first
-start it downloads to `models/qwen2.5-7b-instruct/`. Both endpoints are
-OpenAI-compatible:
+start it downloads to `models/qwen2.5-32b-instruct/`. The served model ID stays
+`qwen2.5-7b-instruct` for compatibility with existing clients. Both endpoints
+are OpenAI-compatible:
 
 - Transcription: `http://127.0.0.1:8001/v1/audio/transcriptions`
-- Translation: `http://127.0.0.1:8002/v1/chat/completions`, model
+- Translation: `http://127.0.0.1:8002/v1/chat/completions`, served as
   `qwen2.5-7b-instruct`
+
+`japanese-mode` points the Tailscale route at Speaches (port 8001) so ASR works,
+and adds `/v1/models` and `/v1/chat/completions` routes to the translation server
+(port 8002). Clients such as Reins that discover models via `/v1/models` therefore
+see `qwen2.5-7b-instruct`, while transcription stays on the same base URL.
+Speaches also proxies `/v1/chat/completions` to the translation server using
+`CHAT_COMPLETION_BASE_URL` (default `http://127.0.0.1:8002/v1`), which remains the
+fallback for clients that post through the root route:
+
+In Reins, add an OpenAI-compatible server with base URL
+`https://alibazz.tailf4ff3b.ts.net/v1` and no API key. The app discovers
+`qwen2.5-7b-instruct` from `/v1/models`.
+
+```bash
+# Transcription and translation through the tailnet endpoint
+curl --fail https://alibazz.tailf4ff3b.ts.net/v1/audio/transcriptions ...
+curl --fail https://alibazz.tailf4ff3b.ts.net/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"qwen2.5-7b-instruct","messages":[{"role":"user","content":"Translate to English. Reply with only the translation:\nこんにちは。"}],"max_tokens":256,"temperature":0.2}'
+```
 
 Example translation request after transcription:
 
@@ -147,6 +174,22 @@ curl --fail http://127.0.0.1:8002/v1/chat/completions \
   }'
 ```
 
+The same model can act as a tutor, using the surrounding context and breaking
+down grammar and nuance:
+
+```bash
+curl --fail http://127.0.0.1:8002/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "qwen2.5-7b-instruct",
+    "messages": [{"role": "user", "content": "Act as a Japanese tutor. Translate this sentence, then break down the main grammar points and nuance:\n雨が降りそうだから、傘を持っていったほうがいいよ。"}],
+    "max_tokens": 700,
+    "temperature": 0.3
+  }'
+```
+
+It uses about 25 GiB of VRAM with ASR running, leaving roughly 6 GiB free.
+
 Japanese mode is independent of `switch-model`; run it directly. It will fail
 cleanly if another GPU server is holding the memory, so stop vLLM first with
 `vllmctl stop`.
@@ -159,7 +202,8 @@ Hugging Face checkpoint directly in `models/`.
 At minimum, this normally includes `config.json`, tokenizer files, and every
 file referenced by `model.safetensors.index.json`. The directory is excluded
 from Git and mounted read-only inside the container. The ASR weights are not in
-`models/`; Speaches keeps them in the `kotoba-hf-cache` Podman volume.
+`models/`; Speaches keeps them in the `kotoba-hf-cache` Podman volume. The
+Japanese-mode translation weights live in `models/qwen2.5-32b-instruct/`.
 
 ## Day-to-day operation on the hardened host
 

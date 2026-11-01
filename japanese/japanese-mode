@@ -7,9 +7,9 @@ IMAGE='ghcr.io/ggml-org/llama.cpp@sha256:a77f3bea9d62f6187ebb6ca8deb1a03aebeeb1e
 NAME=llama-translate
 PORT=8002
 ALIAS=qwen2.5-7b-instruct
-MODEL=Qwen2.5-7B-Instruct-Q4_K_M.gguf
-MODEL_DIR="$ROOT/models/qwen2.5-7b-instruct"
-MODEL_URL="https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/$MODEL"
+MODEL=Qwen2.5-32B-Instruct-Q5_K_M.gguf
+MODEL_DIR="$ROOT/models/qwen2.5-32b-instruct"
+MODEL_URL="https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF/resolve/main/$MODEL"
 ASR_URL=http://127.0.0.1:8001
 LLM_URL="http://127.0.0.1:$PORT"
 
@@ -17,12 +17,18 @@ llm_running() {
   podman container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null | grep -qx true
 }
 
+container_matches() {
+  local cmd
+  cmd="$(podman container inspect -f '{{join .Config.Cmd " "}}' "$NAME" 2>/dev/null || true)"
+  [[ "$cmd" == *"$MODEL"* ]]
+}
+
 ensure_model() {
   mkdir -p "$MODEL_DIR"
   if [[ -f "$MODEL_DIR/$MODEL" ]]; then
     return 0
   fi
-  echo "Downloading $MODEL (about 4.4 GiB) to $MODEL_DIR ..." >&2
+  echo "Downloading $MODEL (about 21.7 GiB) to $MODEL_DIR ..." >&2
   curl --fail --location --retry 3 --retry-delay 5 \
     --output "$MODEL_DIR/$MODEL.part" "$MODEL_URL"
   mv "$MODEL_DIR/$MODEL.part" "$MODEL_DIR/$MODEL"
@@ -58,14 +64,20 @@ wait_health() {
 
 start_llm() {
   if llm_running; then
-    echo "$NAME is already running." >&2
-    return 0
+    if container_matches; then
+      echo "$NAME is already running." >&2
+      return 0
+    fi
+    podman rm -f "$NAME" >/dev/null
   fi
   ensure_model
-  require_gpu_free 8192
+  require_gpu_free 26000
   if podman container exists "$NAME"; then
-    podman start "$NAME" >/dev/null
-    return 0
+    if container_matches; then
+      podman start "$NAME" >/dev/null
+      return 0
+    fi
+    podman rm -f "$NAME" >/dev/null
   fi
   podman run -d --name "$NAME" --pull=never \
     --device nvidia.com/gpu=all \
@@ -88,6 +100,7 @@ start_all() {
   start_llm
   wait_health asr "$ASR_URL/health" 900
   wait_health translate "$LLM_URL/health" 900
+  ./tailscale-model japanese
   printf '\nJapanese mode is ready:\n'
   printf '  Transcription: %s/v1/audio/transcriptions\n' "$ASR_URL"
   printf '  Translation:   %s/v1/chat/completions (model %s)\n' "$LLM_URL" "$ALIAS"

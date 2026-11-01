@@ -6,9 +6,19 @@ NAME=kotoba-asr
 PORT=8001
 MODEL='kotoba-tech/kotoba-whisper-v2.0-faster'
 VOLUME=kotoba-hf-cache
+NETWORK_MODE=host
+CHAT_COMPLETION_BASE_URL="${CHAT_COMPLETION_BASE_URL:-http://127.0.0.1:8002/v1}"
 
 running() {
   podman container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null | grep -qx true
+}
+
+container_matches() {
+  local mode env
+  mode="$(podman container inspect -f '{{.HostConfig.NetworkMode}}' "$NAME" 2>/dev/null || true)"
+  env="$(podman container inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$NAME" 2>/dev/null || true)"
+  [[ "$mode" == "$NETWORK_MODE" ]] &&
+    grep -Fqx "CHAT_COMPLETION_BASE_URL=$CHAT_COMPLETION_BASE_URL" <<<"$env"
 }
 
 require_gpu_free() {
@@ -37,16 +47,21 @@ case "${1:-status}" in
     require_gpu_free
     podman volume create "$VOLUME" >/dev/null 2>&1 || true
     if podman container exists "$NAME"; then
-      exec podman start "$NAME"
+      if container_matches; then
+        exec podman start "$NAME"
+      fi
+      podman rm -f "$NAME" >/dev/null
     fi
     exec podman run -d --name "$NAME" --pull=never \
+      --network "$NETWORK_MODE" \
       --device nvidia.com/gpu=all \
       --security-opt label=disable \
       --cap-drop=all \
       --security-opt no-new-privileges \
       -e NVIDIA_VISIBLE_DEVICES=void \
-      -e UVICORN_HOST=0.0.0.0 \
+      -e UVICORN_HOST=127.0.0.1 \
       -e UVICORN_PORT="$PORT" \
+      -e "CHAT_COMPLETION_BASE_URL=$CHAT_COMPLETION_BASE_URL" \
       -e WHISPER__INFERENCE_DEVICE=cuda \
       -e WHISPER__COMPUTE_TYPE=float16 \
       -e STT_MODEL_TTL=-1 \
@@ -54,7 +69,6 @@ case "${1:-status}" in
       -e ENABLE_UI=false \
       -e "PRELOAD_MODELS=[\"$MODEL\"]" \
       -e 'UNSTABLE_ORT_OPTS={"exclude_providers":["TensorrtExecutionProvider","CUDAExecutionProvider"]}' \
-      -p "127.0.0.1:${PORT}:${PORT}" \
       -v "${VOLUME}:/home/ubuntu/.cache/huggingface" \
       --health-cmd "curl -fsS http://127.0.0.1:${PORT}/health || exit 1" \
       --health-interval 30s \
