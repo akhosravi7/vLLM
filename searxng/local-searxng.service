@@ -1,0 +1,15 @@
+[Unit]
+Description=Local SearXNG for web search
+After=default.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/var/home/ali/vLLM/searxng/searxngctl start
+ExecStop=/var/home/ali/vLLM/searxng/searxngctl stop
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

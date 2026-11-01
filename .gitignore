@@ -11,3 +11,9 @@ logs/
 *.log
 __pycache__/
 *.py[cod]
+
+# Local model-manager and search secrets.
+model-manager/model-manager.env
+model-manager/__pycache__/
+searxng/settings.yml
+searxng/__pycache__/

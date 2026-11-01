@@ -8,11 +8,33 @@ This workspace contains three OpenAI-compatible model servers for the RTX 5090:
 | vLLM (hardened system service) | `http://127.0.0.1:8000/v1` | `Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit` |
 | Speaches ASR (rootless Podman) | `http://127.0.0.1:8001/v1` | `kotoba-tech/kotoba-whisper-v2.0-faster` |
 
-Only one GPU-backed server runs at a time. Use `./switch-model` to stop the
-current server and start another. As of 2026-09-07, Laguna XS 2.1 Q4_K_M is
-running and selected through Tailscale. See
-[Laguna setup and validation](laguna/README.md) for pinned model/image
-downloads, GPU settings, and start/stop commands.
+Only one GPU-backed server runs at a time.
+
+## Model manager (current)
+
+All GGUF chat models, including the former LM Studio downloads, are now driven
+by `model-manager/`. It runs as the `local-model-manager.service` systemd user
+service, keeps the selected model on `127.0.0.1:8002`, and exposes a small
+token-protected API on `127.0.0.1:8010`:
+
+```bash
+systemctl --user status local-model-manager.service
+TOKEN=$(sed -n 's/^MODEL_MANAGER_TOKEN=//p' model-manager/model-manager.env)
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8010/models
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"id":"qwen2.5-7b-fast"}' http://127.0.0.1:8010/switch
+curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:8010/restore-japanese
+```
+
+The catalog is `model-manager/models.json`. The manager does not touch Tailscale;
+the chat PWA keeps the root route and proxies model switches through this API.
+`model-manager` autostarts Japanese mode when no GPU workload is running, so
+Japanese ASR + translation remain the default.
+
+`local-searxng.service` runs `searxng/` on `127.0.0.1:8888` for the chat app's
+optional web search. The old `switch-model`, `japanese-mode`, and `lagunactl`
+workflows remain for manual use but reset the Tailscale route table.
+
 
 ## Switching servers and Tailscale
 

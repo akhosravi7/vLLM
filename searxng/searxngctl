@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Local SearXNG instance used by the chat backend for web search.
+set -euo pipefail
+
+DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+IMAGE="${SEARXNG_IMAGE:-docker.io/searxng/searxng:latest}"
+NAME=searxng
+PORT="${SEARXNG_PORT:-8888}"
+CACHE_VOLUME=searxng-cache
+
+running() {
+  podman container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null | grep -qx true
+}
+
+wait_health() {
+  local start=$SECONDS
+  while (( SECONDS - start < 120 )); do
+    if curl --fail --silent --max-time 3 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "SearXNG did not become healthy within 120 seconds." >&2
+  podman logs --tail 30 "$NAME" >&2 || true
+  return 1
+}
+
+case "${1:-start}" in
+  start)
+    if running; then
+      echo "$NAME is already running." >&2
+      exit 0
+    fi
+    if ! podman image exists "$IMAGE"; then
+      podman pull "$IMAGE"
+    fi
+    podman volume create "$CACHE_VOLUME" >/dev/null 2>&1 || true
+    if podman container exists "$NAME"; then
+      podman start "$NAME" >/dev/null
+    else
+      podman run -d --name "$NAME" --pull=never \
+        --security-opt label=disable \
+        --cap-drop=all \
+        --security-opt no-new-privileges \
+        -p "127.0.0.1:${PORT}:8080" \
+        -v "$DIR/settings.yml:/etc/searxng/settings.yml:ro" \
+        -v "${CACHE_VOLUME}:/var/cache/searxng" \
+        "$IMAGE" >/dev/null
+    fi
+    wait_health
+    ;;
+  stop)
+    podman stop --time 20 "$NAME" >/dev/null 2>&1 || true
+    ;;
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+  status)
+    podman ps -a --filter "name=^${NAME}$"
+    ;;
+  logs)
+    exec podman logs --tail 100 "$NAME"
+    ;;
+  follow)
+    exec podman logs --tail 100 -f "$NAME"
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status|logs|follow}" >&2
+    exit 2
+    ;;
+esac

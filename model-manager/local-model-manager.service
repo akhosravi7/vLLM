@@ -1,0 +1,18 @@
+[Unit]
+Description=Local AI model manager (llama.cpp)
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/home/ali/vLLM/model-manager
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+EnvironmentFile=/var/home/ali/vLLM/model-manager/model-manager.env
+ExecStart=/usr/bin/python3 /var/home/ali/vLLM/model-manager/manager.py
+Restart=on-failure
+RestartSec=5
+KillMode=process
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

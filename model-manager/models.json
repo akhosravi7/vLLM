@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "default_model": "qwen2.5-7b-instruct",
+  "models": [
+    {
+      "id": "qwen2.5-7b-instruct",
+      "name": "Japanese mode (Qwen2.5 32B Instruct)",
+      "description": "Default profile: Japanese ASR on 8001 plus Qwen2.5 32B translation on 8002. Alias kept for existing clients.",
+      "file": "/var/home/ali/vLLM/models/qwen2.5-32b-instruct/Qwen2.5-32B-Instruct-Q5_K_M.gguf",
+      "size_bytes": 23262157696,
+      "ctx": 8192,
+      "temp": 0.3,
+      "top_p": 0.9,
+      "profile": "japanese",
+      "default": true
+    },
+    {
+      "id": "hemingway-1-uncensored-heretic",
+      "name": "Hemingway 1 Uncensored Heretic (Q6_K)",
+      "description": "Uncensored Qwen 27B-class creative model.",
+      "file": "/var/home/ali/vLLM/models/hemingway-1-uncensored-heretic/Hemmingway-1-Uncensored-Heretic.Q6_K.gguf",
+      "size_bytes": 22082530624,
+      "ctx": 16384,
+      "temp": 0.8,
+      "top_p": 0.95,
+      "top_k": 40,
+      "min_p": 0.05,
+      "profile": "chat"
+    },
+    {
+      "id": "qwen3.6-35b-a3b-uncensored-aggressive",
+      "name": "Qwen3.6 35B A3B Uncensored Aggressive (Q4_K_M)",
+      "description": "MoE model with a large context budget and fast token throughput.",
+      "file": "/var/home/ali/vLLM/models/qwen3.6-35b-a3b-uncensored-aggressive/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "size_bytes": 21166758016,
+      "ctx": 32768,
+      "temp": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "min_p": 0.0,
+      "profile": "chat"
+    },
+    {
+      "id": "hermes-3.6-35b-a3b-genesis-v7",
+      "name": "Hermes 3.6 35B A3B Genesis V7 (Q4)",
+      "description": "Uncensored MoE model, 32k context.",
+      "file": "/var/home/ali/vLLM/models/hermes-3.6-35b-a3b-genesis-v7/Hermes3.6-35B-A3B-Uncensored-Genesis-V7-MTP-APEX-Compact.gguf",
+      "size_bytes": 18322732480,
+      "ctx": 32768,
+      "temp": 0.7,
+      "top_p": 0.9,
+      "top_k": 40,
+      "min_p": 0.0,
+      "profile": "chat"
+    },
+    {
+      "id": "cydonia-24b-v4.3",
+      "name": "Cydonia 24B v4.3 (Q6_K)",
+      "description": "24B roleplay and creative writing model.",
+      "file": "/var/home/ali/vLLM/models/cydonia-24b-v4.3/Cydonia-24B-v4zg-Q6_K.gguf",
+      "size_bytes": 19345939584,
+      "ctx": 16384,
+      "temp": 0.8,
+      "top_p": 0.95,
+      "top_k": 40,
+      "min_p": 0.05,
+      "profile": "chat"
+    },
+    {
+      "id": "qwen3.8-27b-turbofcfusion-uncensored",
+      "name": "Qwen3.8 27B TurboFCFusion Uncensored (Q5_K_M)",
+      "description": "Uncensored 27B coder/chat fusion.",
+      "file": "/var/home/ali/vLLM/models/qwen3.8-27b-turbofcfusion-uncensored/Qwen3.8-27B-TurboFCFusion-735-882-Here-Uncen-NEO-CODER-MAX-MTP-Q5_K_M.gguf",
+      "size_bytes": 21182273056,
+      "ctx": 16384,
+      "temp": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "min_p": 0.0,
+      "profile": "chat"
+    },
+    {
+      "id": "laguna-xs-2.1",
+      "name": "Laguna XS 2.1 (Q4_K_M)",
+      "description": "Laguna roleplay model, 32k context.",
+      "file": "/var/home/ali/vLLM/models/laguna-xs-2.1-poolside/Laguna-XS-2.1-Q4_K_M.gguf",
+      "size_bytes": 20274300032,
+      "ctx": 32768,
+      "temp": 1.0,
+      "top_p": 1.0,
+      "top_k": 20,
+      "min_p": 0.0,
+      "profile": "chat"
+    },
+    {
+      "id": "qwen2.5-7b-fast",
+      "name": "Qwen2.5 7B Instruct (Q4_K_M, fast)",
+      "description": "Small, quick model for short chats.",
+      "file": "/var/home/ali/vLLM/models/qwen2.5-7b-instruct/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+      "size_bytes": 4683074240,
+      "ctx": 32768,
+      "temp": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "min_p": 0.0,
+      "profile": "chat"
+    }
+  ]
+}
